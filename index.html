@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sorriso e Vida — Mapa Diário & Gestão</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <!-- Cabeçalho Principal -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo-badge"><i data-lucide="smile"></i></div>
+      <div>
+        <h1>Sorriso e Vida</h1>
+        <span class="subtitle">Gestão Clínica & Mapa Diário</span>
+      </div>
+    </div>
+
+    <div class="header-controls">
+      <div class="date-picker-box">
+        <label for="dataAtiva"><i data-lucide="calendar"></i> Data:</label>
+        <input type="date" id="dataAtiva" />
+      </div>
+
+      <div id="statusConexao" class="status-badge online" title="Status da sincronização">
+        <span class="dot"></span>
+        <span id="statusTexto">Online</span>
+      </div>
+
+      <button id="btnSincronizar" class="btn btn-outline-light" title="Forçar sincronização com Google Drive">
+        <i data-lucide="refresh-cw"></i> <span id="badgePendentes">0</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Navegação por Abas -->
+  <nav class="tabs-nav">
+    <button class="tab-btn active" data-tab="mapa">
+      <i data-lucide="clipboard-list"></i> Mapa Diário
+    </button>
+    <button class="tab-btn" data-tab="saidas">
+      <i data-lucide="arrow-up-circle"></i> Saídas
+    </button>
+    <button class="tab-btn" data-tab="caixa">
+      <i data-lucide="wallet"></i> Diário de Caixa
+    </button>
+    <button class="tab-btn" data-tab="pagamentos">
+      <i data-lucide="users"></i> Pagamento Dentista
+    </button>
+    <button class="tab-btn" data-tab="geral" data-protected="true">
+      <i data-lucide="lock"></i> Geral (Anual)
+    </button>
+    <button class="tab-btn" data-tab="config" data-protected="true">
+      <i data-lucide="settings"></i> Listas & Taxas
+    </button>
+  </nav>
+
+  <main class="container">
+    <!-- ==================== ABA 1: MAPA DIÁRIO ==================== -->
+    <section id="tab-mapa" class="tab-content active">
+      <div class="card">
+        <div class="card-header">
+          <h2>Novo Atendimento / Venda</h2>
+          <span class="hint">Os descontos de maquineta e comissões são calculados automaticamente.</span>
+        </div>
+
+        <form id="formMapa" class="grid-form">
+          <div class="form-group">
+            <label>Paciente *</label>
+            <input type="text" id="mPaciente" placeholder="Nome completo" required />
+          </div>
+
+          <div class="form-group">
+            <label>Procedimento *</label>
+            <input type="text" id="mProcedimento" placeholder="Ex: Restauração, Coroa..." required />
+          </div>
+
+          <div class="form-group">
+            <label>Especialidade *</label>
+            <select id="mEspecialidade" required></select>
+          </div>
+
+          <div class="form-group">
+            <label>Dentista Vendedor *</label>
+            <select id="mDentistaVenda" required></select>
+          </div>
+
+          <div class="form-group">
+            <label>Valor Pago (R$) *</label>
+            <input type="number" id="mValorPago" step="0.01" min="0" placeholder="0,00" required />
+          </div>
+
+          <div class="form-group">
+            <label>Forma de Pagamento *</label>
+            <select id="mFormaPagamento" required></select>
+          </div>
+
+          <div class="form-group">
+            <label>Dentista Executor *</label>
+            <select id="mDentistaExec" required></select>
+          </div>
+
+          <div class="form-group">
+            <label>Valor Executado Bruto (R$) *</label>
+            <input type="number" id="mValorExecBruto" step="0.01" min="0" placeholder="Igual ao pago ou parcial" required />
+          </div>
+
+          <div class="form-group">
+            <label>Custo Lab. Prótese (R$)</label>
+            <input type="number" id="mValorLab" step="0.01" min="0" value="0" />
+          </div>
+
+          <!-- Pré-visualização em tempo real -->
+          <div class="preview-strip">
+            <div><span>Valor Final (Líq.):</span> <strong id="prevValorFinal">R$ 0,00</strong></div>
+            <div><span>Comissão Venda:</span> <strong id="prevComVenda">R$ 0,00</strong></div>
+            <div><span>Exec. Líquida:</span> <strong id="prevExecLiq">R$ 0,00</strong></div>
+            <div><span>Comissão Exec.:</span> <strong id="prevComExec">R$ 0,00</strong></div>
+            <div class="highlight"><span>Comissão Total:</span> <strong id="prevComTotal">R$ 0,00</strong></div>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+              <i data-lucide="plus-circle"></i> Lançar no Mapa
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Lançamentos do Dia</h2>
+          <div class="summary-pill">Total Líquido: <strong id="mapaTotalLiquido">R$ 0,00</strong></div>
+        </div>
+        <div class="table-responsive">
+          <table id="tabelaMapa">
+            <thead>
+              <tr>
+                <th>Paciente</th>
+                <th>Procedimento / Esp.</th>
+                <th>Pagamento</th>
+                <th>Pago (Bruto)</th>
+                <th>Valor Final</th>
+                <th>Vend. / Com. Venda</th>
+                <th>Exec. Líq.</th>
+                <th>Lab.</th>
+                <th>Exec. / Com. Exec.</th>
+                <th>Comissão Final</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== ABA 2: SAÍDAS ==================== -->
+    <section id="tab-saidas" class="tab-content">
+      <div class="card">
+        <div class="card-header">
+          <h2>Registrar Saída de Caixa / Desconto Dentista</h2>
+        </div>
+
+        <form id="formSaidas" class="grid-form">
+          <div class="form-group">
+            <label>Descrição da Saída *</label>
+            <select id="sDescricao" required></select>
+          </div>
+
+          <div class="form-group hidden" id="boxOutros">
+            <label>Especifique (Outros) *</label>
+            <input type="text" id="sOutrosTexto" placeholder="Descreva a saída..." />
+          </div>
+
+          <div class="form-group hidden" id="boxDentistaDesconto">
+            <label>Dentista (Desconto na Produção) *</label>
+            <select id="sDentista"></select>
+          </div>
+
+          <div class="form-group">
+            <label>Origem do Dinheiro *</label>
+            <select id="sOrigem">
+              <option value="Gaveta">Gaveta (Dinheiro em Espécie)</option>
+              <option value="Conta/Pix">Conta Bancária / Pix</option>
+              <option value="Desconto Produção">Apenas Desconto em Folha Dentista</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Valor (R$) *</label>
+            <input type="number" id="sValor" step="0.01" min="0.01" placeholder="0,00" required />
+          </div>
+
+          <div class="form-group">
+            <label>Observação (Opcional)</label>
+            <input type="text" id="sObs" placeholder="Ex: Nota fiscal, vale, etc." />
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+              <i data-lucide="minus-circle"></i> Registrar Saída
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Saídas Registradas no Dia</h2>
+          <div class="summary-pill danger">Total Saídas: <strong id="saidasTotalDia">R$ 0,00</strong></div>
+        </div>
+        <div class="table-responsive">
+          <table id="tabelaSaidas">
+            <thead>
+              <tr>
+                <th>Descrição</th>
+                <th>Detalhe / Dentista</th>
+                <th>Origem</th>
+                <th>Valor</th>
+                <th>Observação</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== ABA 3: DIÁRIO DE CAIXA ==================== -->
+    <section id="tab-caixa" class="tab-content">
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <span>Faturamento Bruto</span>
+          <strong id="cxBruto">R$ 0,00</strong>
+        </div>
+        <div class="kpi-card">
+          <span>Faturamento Líquido (Pós-Taxas)</span>
+          <strong id="cxLiquido">R$ 0,00</strong>
+        </div>
+        <div class="kpi-card highlight-green">
+          <span>Saldo em Gaveta (Dinheiro)</span>
+          <strong id="cxGaveta">R$ 0,00</strong>
+          <small>Entradas Dinheiro - Saídas Gaveta</small>
+        </div>
+        <div class="kpi-card highlight-red">
+          <span>Total de Saídas do Dia</span>
+          <strong id="cxSaidas">R$ 0,00</strong>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-header">
+            <h2>Resumo por Modalidade (Dia)</h2>
+          </div>
+          <table class="simple-table">
+            <thead>
+              <tr>
+                <th>Modalidade</th>
+                <th>Bruto</th>
+                <th>Líquido</th>
+              </tr>
+            </thead>
+            <tbody id="cxModalidadesBody"></tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>Ranking de Parcelamento no Crédito</h2>
+            <span class="hint">Acumulado geral para saber o perfil dos pacientes</span>
+          </div>
+          <table class="simple-table">
+            <thead>
+              <tr>
+                <th>Modalidade Crédito</th>
+                <th>Qtd. Vendas</th>
+                <th>Volume Total</th>
+              </tr>
+            </thead>
+            <tbody id="cxRankingCreditoBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== ABA 4: PAGAMENTO DENTISTA ==================== -->
+    <section id="tab-pagamentos" class="tab-content">
+      <div class="card">
+        <div class="card-header">
+          <h2>Fechamento & Repasse aos Dentistas (Dia)</h2>
+          <span class="hint">Preencha o valor pago no dia. O sistema impede saldo negativo.</span>
+        </div>
+        <div class="table-responsive">
+          <table id="tabelaPagamentos">
+            <thead>
+              <tr>
+                <th>Dentista (CRO)</th>
+                <th>Total Vendido (Líq.)</th>
+                <th>Com. Venda</th>
+                <th>Com. Execução</th>
+                <th>Produção Total</th>
+                <th>Saídas / Descontos</th>
+                <th>Total a Receber</th>
+                <th>Valor Pago (Adm)</th>
+                <th>Saldo Restante</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== ABA 5: GERAL (ANUAL - PROTEGIDA) ==================== -->
+    <section id="tab-geral" class="tab-content">
+      <div class="card">
+        <div class="card-header">
+          <h2>Fluxo de Caixa Anual — Visão Gerencial</h2>
+          <div class="header-inline">
+            <label for="filtroAno">Ano:</label>
+            <select id="filtroAno"></select>
+            <button id="btnBloquearGeral" class="btn btn-sm btn-outline">
+              <i data-lucide="lock"></i> Bloquear Aba
+            </button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table id="tabelaGeralMeses">
+            <thead>
+              <tr>
+                <th>Mês</th>
+                <th>Receita (Líq.)</th>
+                <th>Despesas</th>
+                <th>Lucro Líquido</th>
+                <th>Dinheiro</th>
+                <th>Pix</th>
+                <th>Débito</th>
+                <th>Crédito</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-header">
+            <h2>Despesas Detalhadas por Categoria (Ano)</h2>
+          </div>
+          <table class="simple-table">
+            <thead>
+              <tr>
+                <th>Categoria</th>
+                <th>Total Gasto</th>
+                <th>% das Despesas</th>
+              </tr>
+            </thead>
+            <tbody id="geralDespesasBody"></tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>Vendas por Especialidade (Ano)</h2>
+          </div>
+          <table class="simple-table">
+            <thead>
+              <tr>
+                <th>Especialidade</th>
+                <th>Qtd.</th>
+                <th>Total Líquido</th>
+              </tr>
+            </thead>
+            <tbody id="geralEspecialidadesBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== ABA 6: CONFIGURAÇÕES (PROTEGIDA) ==================== -->
+    <section id="tab-config" class="tab-content">
+      <div class="card-header-bar">
+        <h2>Configurações e Listas Fixas</h2>
+        <button id="btnBloquearConfig" class="btn btn-sm btn-outline">
+          <i data-lucide="lock"></i> Bloquear Aba
+        </button>
+      </div>
+
+      <div class="two-col">
+        <!-- Prestadores -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Dentistas Prestadores</h3>
+          </div>
+          <form id="formAddDentista" class="inline-form">
+            <input type="text" id="cfgDentistaNome" placeholder="Nome do Dentista" required />
+            <input type="text" id="cfgDentistaCro" placeholder="CRO (Ex: CRO-CE 1234)" required />
+            <button type="submit" class="btn btn-primary">Adicionar</button>
+          </form>
+          <ul id="listaDentistas" class="editable-list"></ul>
+        </div>
+
+        <!-- Percentuais por Especialidade -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Repasse por Especialidade (%)</h3>
+          </div>
+          <form id="formAddEspecialidade" class="inline-form">
+            <input type="text" id="cfgEspNome" placeholder="Especialidade" required />
+            <input type="number" id="cfgEspPerc" step="0.1" min="0" max="100" placeholder="%" required />
+            <button type="submit" class="btn btn-primary">Adicionar</button>
+          </form>
+          <ul id="listaEspecialidades" class="editable-list"></ul>
+        </div>
+
+        <!-- Taxas da Maquineta -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Taxas da Maquineta (%)</h3>
+          </div>
+          <ul id="listaTaxas" class="editable-list"></ul>
+        </div>
+
+        <!-- Categorias de Saída -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Descrições de Saída do Caixa</h3>
+          </div>
+          <form id="formAddSaidaCat" class="inline-form">
+            <input type="text" id="cfgSaidaNome" placeholder="Nova categoria de saída" required />
+            <button type="submit" class="btn btn-primary">Adicionar</button>
+          </form>
+          <ul id="listaSaidasCat" class="editable-list"></ul>
+        </div>
+      </div>
+
+      <!-- Integração Google Apps Script e Senha -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Integração Google Drive / Sheets & Segurança</h3>
+        </div>
+        <div class="grid-form">
+          <div class="form-group">
+            <label>URL do Web App (Google Apps Script)</label>
+            <input type="url" id="cfgGasUrl" placeholder="https://script.google.com/macros/s/..." />
+          </div>
+          <div class="form-group">
+            <label>Senha das Abas Restritas (Geral e Configurações)</label>
+            <input type="password" id="cfgNovaSenha" placeholder="Alterar senha (padrão: 1234)" />
+          </div>
+          <div class="form-actions">
+            <button id="btnSalvarSistema" class="btn btn-primary">Salvar Configurações de Sistema</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal de Senha -->
+  <div id="modalSenha" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <h3><i data-lucide="shield-alert"></i> Acesso Restrito</h3>
+      <p>Digite a senha administrativa para acessar esta área:</p>
+      <input type="password" id="inputSenhaAcesso" placeholder="Senha..." />
+      <p id="erroSenha" class="error-text hidden">Senha incorreta. Tente novamente.</p>
+      <div class="modal-actions">
+        <button id="btnCancelarSenha" class="btn btn-outline">Cancelar</button>
+        <button id="btnConfirmarSenha" class="btn btn-primary">Entrar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
